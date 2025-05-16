@@ -1,7 +1,6 @@
 from .custom_types import FINDER
 from .imports import os
 from .env import (
-    URL_OUTLOOK,
     URL_SHAREPOINT,
     URL_POWERBI_SHOW,
     URL_POWERBI_EXPORT
@@ -10,7 +9,7 @@ from .env import (
 
 EDGE_USER_DATA_DIR = os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\Edge\User Data")
 URLS = {
-    "outlook": URL_OUTLOOK,
+    "outlook": "https://outlook.office.com/mail/inbox",
     "sharepoint": URL_SHAREPOINT,
     "powerbi export": URL_POWERBI_EXPORT,
     "powerbi show": URL_POWERBI_SHOW

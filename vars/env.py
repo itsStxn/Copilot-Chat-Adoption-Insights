@@ -10,7 +10,6 @@ TEST_EXCLUDED = os.getenv("test_excluded")
 TEST_TO = os.getenv("test_to")
 TEST_CC = os.getenv("test_cc")
 
-URL_OUTLOOK = os.getenv("url_outlook")
 URL_SHAREPOINT = os.getenv("url_sharepoint")
 URL_POWERBI_SHOW = os.getenv("url_powerbi_show")
 URL_POWERBI_EXPORT = os.getenv("url_powerbi_export")
