@@ -1,0 +1,7 @@
+__pycache__/
+venv/
+media/
+test/
+.env
+*.txt
+*.png
