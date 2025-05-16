@@ -82,9 +82,11 @@ This project contains a script designed to notify Microsoft BeLux V-teams about 
 - During test runs, `test_logs.txt` and `test_mail_logs.txt` will be created instead
 
 ## Timing
-- The script can be run 7 or more days after the las time:
-  - Snapshots are stored for every Tuesday of the week
-  - The Power BI dashboard shows data taken the day before
+- The script should be run 7 or more days after the las time:
+- The Power BI dashboard shows data taken the day before
+- Recommended to let the script run in the background
+  - It can take up to 3 min to gather visuals and compose a single mail
+  - Should be run while working on something else 
 
 ## Visuals
 - The html attributes are indicated in dictionaries the `browser.py` file in `/vars`
