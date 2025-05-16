@@ -91,6 +91,7 @@ This project contains a script designed to notify Microsoft BeLux V-teams about 
 
 ## Requirements
 
+- Git
 - Python 3.8 or higher
 - Microsoft Edge installed
 - Required Python libraries (see `requirements.txt`)
