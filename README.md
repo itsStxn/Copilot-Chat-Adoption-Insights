@@ -34,7 +34,6 @@ This project contains a script designed to notify Microsoft BeLux V-teams about 
 - `test_to`: the To used during test runs
 - `test_excluded`: list of people that will be notified once and excluded from CCs
 - `test_excluded_names`: name of people that will be notified once and excluded from CCs. **Note:** Divided by `, `
-- `url_outlook`: url to the outlook inbox
 - `url_sharepoint`: url to the SharePoint with relevant `txt` data in *csv format*
 - `url_powerbi_export`: url to the Power BI dashboard with tables with columns to export
 - `url_powerbi_show`: url to the Power BI dashboard with visuals to show
@@ -96,6 +95,7 @@ This project contains a script designed to notify Microsoft BeLux V-teams about 
 - Git
 - Python 3.8 or higher
 - Microsoft Edge installed
+- *MSFT-AzVPN-Manual* turned on
 - Required Python libraries (see `requirements.txt`)
 - Working Profile folder in Microsoft Edge's appdata folder
 

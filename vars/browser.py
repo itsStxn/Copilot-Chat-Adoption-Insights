@@ -9,7 +9,7 @@ from .env import (
 
 EDGE_USER_DATA_DIR = os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\Edge\User Data")
 URLS = {
-    "outlook": "https://outlook.office.com/mail/inbox",
+    "outlook": "https://outlook.office.com/mail/",
     "sharepoint": URL_SHAREPOINT,
     "powerbi export": URL_POWERBI_EXPORT,
     "powerbi show": URL_POWERBI_SHOW

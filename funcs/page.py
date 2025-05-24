@@ -12,12 +12,12 @@ from vars.exports import (
 
 def click_and_wait(element:Locator, page:Page, timeout=500, render_time=30000, clicks=1) -> None:
     """
-    Clicks on a specified element one or more times, ensuring it is attached, visible, and scrolled into view before each click, and waits for specified timeouts between actions.
+    Clicks on a given element one or more times, ensuring it is attached, visible, and scrolled into view before each click, with configurable wait times.
     Args:
-        element (Locator): The locator of the element to interact with.
-        page (Page): The Playwright page object for controlling browser actions.
-        timeout (int, optional): Time to wait (in milliseconds) after each click. Defaults to 500.
-        render_time (int, optional): Maximum time (in milliseconds) to wait for the element to be attached and visible. Defaults to 30000.
+        element (Locator): The element to interact with.
+        page (Page): The Playwright page instance.
+        timeout (int, optional): Time in milliseconds to wait before each click and after having clicked n times. Defaults to 500.
+        render_time (int, optional): Maximum time in milliseconds to wait for the element to be attached and visible. Defaults to 30000.
         clicks (int, optional): Number of times to click the element. Defaults to 1.
     Returns:
         None
@@ -28,8 +28,10 @@ def click_and_wait(element:Locator, page:Page, timeout=500, render_time=30000, c
     element.wait_for(state="visible", timeout=render_time)
     page.wait_for_timeout(timeout)
     for _ in range(clicks):
-        element.click()
         page.wait_for_timeout(timeout)
+        element.click()
+    
+    page.wait_for_timeout(timeout)
 
 def wait_for(container:Page|Locator, dom_attr:FINDER, timeout=60000, at:list[str]|None=None, skip:list[str]=[], dynamic:dict[str, str]|None=None, index:dict[str, int]|None=None, strict=True) -> list[Locator]:
     """

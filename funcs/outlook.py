@@ -308,7 +308,7 @@ def send_new_mail(to:str, cc:str, names:str, role:str, structure:pd.DataFrame, p
         collected_pics=collected_pics
     )
 
-    click_and_wait(send, outlook, timeout=1000)
+    click_and_wait(send, outlook, timeout=2000)
 
     log(f"Mail sent to {names}")
     log(

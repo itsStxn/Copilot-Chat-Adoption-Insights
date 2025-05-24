@@ -22,7 +22,7 @@ def list_edge_profiles() -> list[str]:
 
 def goto(page:Page, url:str) -> Page:
     """
-    Navigates the given Playwright Page to the specified URL and waits until the navigation is complete.
+    Navigates the given Playwright page to the specified URL and waits until the navigation is complete.
     Args:
         page (Page): The Playwright Page object to navigate.
         url (str): The URL to navigate to.
