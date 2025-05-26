@@ -29,6 +29,7 @@ This project contains a script designed to notify Microsoft BeLux V-teams about 
 - The run will take into account previous logs and avoid mailing again the same people
 
 ## Env variables
+Create an `.env` file in the project's root, then write the following variables:
 - `default_emails`: additional emails to append to the CCs
 - `test_cc`: the CC used during test runs
 - `test_to`: the To used during test runs
