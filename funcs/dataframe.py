@@ -8,8 +8,10 @@ from vars.exports import (
   SHAREPOINT_DOM,
   DATE_FORMAT, 
   POWERBI_DOM, 
+  COLTYPES, 
+  ACTUAL,
   PAGES, 
-  COLS, 
+  COLS,
   TEST,
   pd
 )
@@ -35,9 +37,9 @@ def is_week_old(data:pd.DataFrame) -> bool:
         bool: True if the last date in the "Date" column is at least one week older than yesterday, False otherwise.
     """
 
-    dates = data[["Date"]]
-    dates.loc[:, "Date"] = pd.to_datetime(dates["Date"])
-    last_date: dt = dates["Date"].iloc[-1]
+    dates = data[[COLS["date"]]]
+    dates.loc[:, COLS["date"]] = pd.to_datetime(dates[COLS["date"]])
+    last_date: dt = dates[COLS["date"]].iloc[-1]
 
     bxl_tz = pytz.timezone("Europe/Brussels")
     yesterday = dt.now(bxl_tz) - td(days=1)
@@ -74,14 +76,14 @@ def drop_empty_cells(df:pd.DataFrame) -> pd.DataFrame:
     Parameters:
         df (pd.DataFrame): The input DataFrame to process.
     Returns:
-        pd.DataFrame: A DataFrame with rows containing empty cells or cells matching the EMPTY_CELLS_REGEX in the column specified by COLS["text"] removed.
+        pd.DataFrame: A DataFrame with rows containing empty cells or cells matching the EMPTY_CELLS_REGEX in the column specified by COLTYPES["text"] removed.
     Notes:
         - The function first drops rows with any NaN values.
-        - Then, it filters out rows where any value in the column specified by COLS["text"] matches the EMPTY_CELLS_REGEX pattern.
-        - Requires the global variables COLS and EMPTY_CELLS_REGEX to be defined.
+        - Then, it filters out rows where any value in the column specified by COLTYPES["text"] matches the EMPTY_CELLS_REGEX pattern.
+        - Requires the global variables COLTYPES and EMPTY_CELLS_REGEX to be defined.
     """
 
-    return df.dropna().loc[~df[COLS["text"]].apply(lambda row: row.astype(str).str.match(EMPTY_CELLS_REGEX).any(), axis=1)]
+    return df.dropna().loc[~df[COLTYPES["text"]].apply(lambda row: row.astype(str).str.match(EMPTY_CELLS_REGEX).any(), axis=1)]
 
 def adjust_powerbi_excel_data(df:pd.DataFrame) -> pd.DataFrame:
     """
@@ -99,21 +101,21 @@ def adjust_powerbi_excel_data(df:pd.DataFrame) -> pd.DataFrame:
         pd.DataFrame: The cleaned and adjusted DataFrame ready for Power BI Excel processing.
     """
 
-    top_parent = df[["TopParent"]]
+    top_parent = df[[COLS["account"]]]
 
-    df = df.drop("TopParent", axis=1)
+    df = df.drop(COLS["account"], axis=1)
     
     df = df.map(lambda x: x.replace(",", "") if isinstance(x, str) else x)
     df = pd.concat([top_parent, df], axis=1)
 
     df = df.sort_values(
-        by=["TopParent"],
+        by=[COLS["account"]],
         key=lambda col: col.str.lower()
     )
 
     bxl_tz = pytz.timezone("Europe/Brussels")
     time = dt.now(bxl_tz) - td(days=1)
-    df["Date"] = time.strftime(DATE_FORMAT)
+    df[COLS["date"]] = time.strftime(DATE_FORMAT)
     
     return empty_cells_to_num(drop_empty_cells(df))
 
@@ -209,6 +211,52 @@ def sharepoint_txt_data(desc:str, close_editor=True) -> pd.DataFrame:
 
     return df
 
+def fix_tam(progress: pd.DataFrame) -> pd.DataFrame:
+    """
+    Updates the TAM (Total Addressable Market) values in the given DataFrame based on actual TAM data,
+    and recalculates the adoption percentage for each unique AE (Account Executive) ID.
+    Args:
+        progress (pd.DataFrame): The DataFrame containing progress data, including AE IDs, TAM, and adoption columns.
+    Returns:
+        pd.DataFrame: The updated DataFrame with corrected TAM values and recalculated adoption percentages.
+    Notes:
+        - Assumes the existence of global variables COLS (column mappings) and ACTUAL (actual TAM data).
+        - The adoption percentage is recalculated as (adoption / TAM) * 100 for non-zero TAM values,
+          and formatted as a percentage string with two decimal places.
+    """
+
+    t, a = COLS["tam"], COLS["adoption"]
+    a_pct = COLS["adoption %"]
+    actual_tam = ACTUAL["tam"]
+
+    for ID in progress[COLS["ae"]].unique():
+        if ID not in actual_tam["ID"].values:
+            continue
+
+        accounts = str(actual_tam.loc[actual_tam["ID"] == ID, "Accounts"].values[0]).split("|")
+        tams = str(actual_tam.loc[actual_tam["ID"] == ID, "TAM"].values[0]).split(",")
+
+        if len(accounts) != len(tams):
+            raise Exception(
+                f"Accounts and TAM lengths mismatch for AE ID {ID}: "
+                f"{len(accounts)} accounts, {len(tams)} TAMs"
+            )
+        
+        for account, tam in zip(accounts, tams):
+            progress.loc[
+                (progress[COLS["ae"]] == ID) & 
+                (progress[COLS["account"]] == account), t
+            ] = tam
+
+        a_nozero = (progress.loc[progress[t] != 0, a]).astype(int)
+        t_nozero = (progress.loc[progress[t] != 0, t]).astype(int)
+
+        progress[a_pct] = a_nozero / t_nozero
+        progress[a_pct] = progress[a_pct] * 100
+        progress[a_pct] = progress[a_pct].map(lambda x: f"{x:.2f}%")
+        
+    return progress
+
 def try_update_accounts_data() -> pd.DataFrame:
     """
     Updates the accounts data from SharePoint if the stored data is older than a week and not in test mode.
@@ -235,7 +283,7 @@ def try_update_accounts_data() -> pd.DataFrame:
         return stored_data
 
     log("Updating SharePoint Copilot MAU snapshots...", left_nl=1)
-    new_data = powerbi_excel_data()
+    new_data = fix_tam(powerbi_excel_data())
 
     sharepoint.bring_to_front()
 

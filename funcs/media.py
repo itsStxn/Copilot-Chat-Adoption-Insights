@@ -7,10 +7,12 @@ from vars.exports import (
     DF2IMG_OPTIONS,
     POWERBI_DOM, 
     ACCOUNTS, 
+    COLTYPES,
+    ACTUAL, 
     Image, 
     PAGES, 
     MEDIA, 
-    COLS, 
+    COLS,
     IMG, 
     pd
 )
@@ -259,7 +261,8 @@ def capture_powerbi_elements(team:pd.Series, save=False) -> tuple[list[IMG], str
     url = powerbi_url()
     goto(powerbi, url)
 
-    screenshot = filtered_accounts(team) if ACCOUNTS["filter"] else capture(
+    is_to_adjust = ACCOUNTS["filter"] or team["ID"] in ACTUAL["tam"]["ID"].values
+    screenshot = filtered_accounts(team) if is_to_adjust else capture(
         wait_for(
             powerbi, 
             POWERBI_DOM, 
@@ -293,39 +296,39 @@ def plot_ae_progress(team:pd.Series, show_datapoint_num=False) -> list[IMG]:
     progress = df[df[role] == team["ID"]].copy()
 
     if filter:
-        progress["TopParent"] = progress["TopParent"].apply(
+        progress[COLS["account"]] = progress[COLS["account"]].apply(
             lambda x: str_normalize(str(x).strip())
         )
-        progress = progress[progress["TopParent"].str.lower().str.strip().isin(filter)]
+        progress = progress[progress[COLS["account"]].str.lower().str.strip().isin(filter)]
     
-    progress['Date'] = pd.to_datetime(progress['Date'])
-    progress['Copilot Chat MAU (Paid +UnPaid)'] = pd.to_numeric(progress['Copilot Chat MAU (Paid +UnPaid)'])
-    progress['Copilot Chat H2 Incremental MAU'] = pd.to_numeric(progress['Copilot Chat H2 Incremental MAU'])
+    progress[COLS["date"]] = pd.to_datetime(progress[COLS["date"]])
+    progress[COLS["adoption"]] = pd.to_numeric(progress[COLS["adoption"]])
+    progress[COLS["incremental"]] = pd.to_numeric(progress[COLS["incremental"]])
 
-    progress = progress.groupby('Date').agg({
-        'Copilot Chat MAU (Paid +UnPaid)': 'sum',
-        'Copilot Chat H2 Incremental MAU': 'sum'
+    progress = progress.groupby(COLS["date"]).agg({
+        COLS["adoption"]: 'sum',
+        COLS["incremental"]: 'sum'
     }).reset_index()
 
     fig, ax1 = plt.subplots(figsize=(12, 6))
-    x = progress['Date']
+    x = progress[COLS["date"]]
 
-    ax1.set_xlabel('Date')
-    ax1.plot(x, progress["Copilot Chat MAU (Paid +UnPaid)"], marker="o", label="Copilot Chat MAU (Paid + UnPaid)", color='tab:blue', linewidth=2)
+    ax1.set_xlabel(COLS["date"])
+    ax1.plot(x, progress[COLS["adoption"]], marker="o", label="Copilot Chat MAU (Paid + UnPaid)", color='tab:blue', linewidth=2)
     ax1.tick_params(axis='y', labelcolor='tab:blue')
-    ax1.set_xticks(progress['Date'])
-    ax1.set_xticklabels(progress['Date'].dt.strftime('%d-%B-%Y'), rotation=45)
+    ax1.set_xticks(progress[COLS["date"]])
+    ax1.set_xticklabels(progress[COLS["date"]].dt.strftime('%d-%B-%Y'), rotation=45)
 
     if show_datapoint_num:
-        for i, value in enumerate(progress["Copilot Chat MAU (Paid +UnPaid)"]):
+        for i, value in enumerate(progress[COLS["adoption"]]):
             ax1.text(x[i], value, f'{value}', color='black', fontsize=9, ha='center', va='bottom')
 
     ax2 = ax1.twinx()
-    ax2.plot(x, progress["Copilot Chat H2 Incremental MAU"], marker='o', label='Copilot Chat H2 Incremental MAU', color='tab:orange', linewidth=2)
+    ax2.plot(x, progress[COLS["incremental"]], marker='o', label=COLS["incremental"], color='tab:orange', linewidth=2)
     ax2.tick_params(axis='y', labelcolor='tab:orange')
 
     if show_datapoint_num:
-        for i, value in enumerate(progress["Copilot Chat H2 Incremental MAU"]):
+        for i, value in enumerate(progress[COLS["incremental"]]):
             ax2.text(x[i], value, f'{value}', color='black', fontsize=9, ha='center', va='bottom')
 
     handles1, labels1 = ax1.get_legend_handles_labels()
@@ -358,40 +361,39 @@ def filtered_accounts_overview(team:pd.Series) -> tuple[pd.DataFrame, IMG]:
     Raises:
         Exception: If no filtered accounts are provided in ACCOUNTS["filter"].
     Notes:
-        - The function expects global variables ACCOUNTS, COLS, DF2IMG_OPTIONS, and utility functions such as str_normalize, df2img, crop_pic, and Image to be defined elsewhere.
+        - The function expects global variables ACCOUNTS, COLTYPES, DF2IMG_OPTIONS, and utility functions such as str_normalize, df2img, crop_pic, and Image to be defined elsewhere.
         - The function filters accounts based on the "TopParent" field and the provided filter list.
         - The resulting DataFrame is visualized and returned as an image after cropping.
     """
-
-    if ACCOUNTS["filter"] is None:
-        raise Exception("No filtered accounts were given")
     
     df = ACCOUNTS["data"].copy()
-    df["Date"] = pd.to_datetime(df["Date"])
+    df[COLS["date"]] = pd.to_datetime(df[COLS["date"]])
     
-    last_date = df["Date"].max()
     id = team["ID"]
+    last_date = df[COLS["date"]].max()
 
-    ae_df: pd.DataFrame = df.loc[(df["AE"] == id) & (df["Date"] == last_date)]
-    sum_cols = [col for col in df.columns if col not in COLS["text"] + COLS["avg"] + ["Date"]]
+    ae_df: pd.DataFrame = df.loc[(df["AE"] == id) & (df[COLS["date"]] == last_date)]
+    sum_cols = [col for col in df.columns if col not in COLTYPES["text"] + COLTYPES["avg"] + [COLS["date"]]]
 
     ae_df.loc[:, sum_cols] = ae_df.loc[:, sum_cols].astype(int)
-    COLS["sum"] = sum_cols
+    COLTYPES["sum"] = sum_cols
 
-    filter = [str_normalize(s.lower().strip()) for s in ACCOUNTS["filter"]]
-    filtered = ae_df.drop(columns=["Date", "AE"])
-    filtered["TopParent"] = filtered["TopParent"].apply(
-        lambda x: str_normalize(str(x).strip())
-    )
+    DF2IMG_OPTIONS["df"] = ae_df.drop(columns=[COLS["date"], "AE"])
 
-    filtered = filtered[filtered["TopParent"].str.lower().str.strip().isin(filter)]
-    DF2IMG_OPTIONS["df"] = filtered
+    if ACCOUNTS["filter"]:
+        filter = [str_normalize(s.lower().strip()) for s in ACCOUNTS["filter"]]
+        filtered = DF2IMG_OPTIONS["df"]
+        filtered[COLS["account"]] = filtered[COLS["account"]].apply(
+            lambda x: str_normalize(str(x).strip())
+        )
+
+        DF2IMG_OPTIONS["df"] = filtered[filtered[COLS["account"]].str.lower().str.strip().isin(filter)]
 
     fig = df2img.plot_dataframe(**DF2IMG_OPTIONS)
     img_bytes = fig.to_image(format="png", width=1000, height=500, scale=2)
     img = Image.open(io.BytesIO(img_bytes))
     
-    return filtered, crop_pic(img)
+    return DF2IMG_OPTIONS["df"], crop_pic(img)
 
 def filtered_accounts(team:pd.Series) -> list[IMG]:
     """
@@ -410,9 +412,9 @@ def filtered_accounts(team:pd.Series) -> list[IMG]:
     df, overview_pic = filtered_accounts_overview(team)
     copy = df.copy()
 
-    avg = COLS["avg"]
-    sum = COLS["sum"]
-    pctg = COLS["%"]
+    avg = COLTYPES["avg"]
+    sum = COLTYPES["sum"]
+    pctg = COLTYPES["%"]
 
     for col in avg:
         if col in pctg:

@@ -50,6 +50,7 @@ SHAREPOINT_DOM: FINDER = {
     "excluded mail": ("[data-id='heroField']", "Mail structure - Excluded.txt"),
     "excluded": ("[data-id='heroField']", "Excluded from CCs.txt"),
     "skip": ("[data-id='heroField']", "Skip.txt"),
+    "actual tam": ("[data-id='heroField']", "Actual TAM.txt"),
     "filter accounts": ("[data-id='heroField']", "Filter accounts.txt"),
  
     #? Row structure

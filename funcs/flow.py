@@ -10,6 +10,7 @@ from vars.exports import (
     TEST_TO,
     TEST_CC,
     PAGES,
+    ACTUAL,
     TEST,
     LOGS,
     SKIP,
@@ -276,6 +277,7 @@ def run_flow() -> None:
             adjust_logs()
 
             BROWSER["edge"], PAGES["powerbi"], PAGES["sharepoint"] = find_work_profile(p)
+            ACTUAL["tam"] = sharepoint_txt_data("actual tam")
             ACCOUNTS["data"] = try_update_accounts_data()
 
             if choice != "2":

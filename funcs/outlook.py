@@ -14,12 +14,13 @@ from vars.exports import (
 )
 
 
-def mail_attach_image(body:Locator, pic:str) -> None:
+def mail_attach_image(body:Locator, pic:str, wait_time=500) -> None:
     """
     Attaches an image to an Outlook email body by simulating a paste event with a base64-encoded image.
     Args:
         body (Locator): The locator for the email body element where the image should be attached.
         pic (str): The base64-encoded string of the image to be attached.
+        wait_time (int, optional): The time to wait after attaching the image before proceeding. Defaults to 500 milliseconds.
     Returns:
         None
     Side Effects:
@@ -53,14 +54,15 @@ def mail_attach_image(body:Locator, pic:str) -> None:
         }""",
         pic
     )
-    outlook.wait_for_timeout(500)
+    outlook.wait_for_timeout(wait_time)
     outlook.keyboard.press("Enter")
 
-def bold(text:str) -> None:
+def bold(text:str, wait_time=0) -> None:
     """
     Types the given text in bold in the Outlook application using keyboard shortcuts.
     Args:
         text (str): The text to be typed in bold.
+        wait_time (int, optional): The time to wait after typing the text before proceeding. Defaults to 0 milliseconds.
     Returns:
         None
     """
@@ -72,6 +74,8 @@ def bold(text:str) -> None:
     outlook.keyboard.press(" ")
     outlook.keyboard.press("Control+B")
     outlook.keyboard.press(" ")
+
+    outlook.wait_for_timeout(wait_time)
 
 def add_emails(input:Locator, emails:list[str], is_to=True) -> None:
     """
@@ -236,15 +240,16 @@ def compose_mail(mail_structure:pd.DataFrame, pics:list[str]=[], collected_pics:
             prev_id = ""
             for title, pic in collected_pics.items():
                 id, _ = title.split(" - ")
+                
+                outlook.wait_for_timeout(500)
                 if prev_id and id != prev_id:
                     outlook.keyboard.press("Enter")
                     outlook.keyboard.press("Enter")
                     outlook.keyboard.press("Enter")
 
-                bold(f"{title}")
-                mail_attach_image(fields["body"], pic)
+                bold(f"{title}", wait_time=1000)
+                mail_attach_image(fields["body"], pic, wait_time=1000)
                 outlook.keyboard.press("Enter")
-                outlook.wait_for_timeout(500)
                 prev_id = id
         elif "visual" in cmd:
             _, id = cmd.split(": ")
