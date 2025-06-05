@@ -47,6 +47,7 @@ Create an `.env` file in the project's root, then write the following variables:
 - `Filter accounts.txt`
   - Columns: ID, Accounts
   - Filters accounts for a specific V-team to consider when sharing the accounts overview visual
+  - Separate *Accounts* by `|` 
 - `Mail structure - AE.txt` or `Mail structure - Excluded.txt`
   - Columns: Command, Text
   - Outlines how a mail should be composed
@@ -73,7 +74,13 @@ Create an `.env` file in the project's root, then write the following variables:
   - Copilot Chat adoption data
 - `V-teams.txt`
   - Columns: ID, Role, Names, To, CC
-  - List of V-teams to mail  
+  - List of V-teams to mail
+  - Separate *Names* values by `,`
+  - Separate *To* and *CC* values by `whitespace`
+- `Actual TAM.txt`
+  - Columns: ID, Accounts, TAM
+  - List of Accounts and their actual TAM
+  - Separate *Accounts* by `|` 
 
 ## Logging
 

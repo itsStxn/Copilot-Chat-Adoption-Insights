@@ -223,4 +223,4 @@ def define_filter(id:str, filter:pd.DataFrame) -> None:
         ACCOUNTS["filter"] = None
         return
 
-    ACCOUNTS["filter"] = account_list[0].split(",")
+    ACCOUNTS["filter"] = account_list[0].split("|")
