@@ -154,27 +154,19 @@ def mail_log(to:str, cc:str, role:str) -> str:
 
     return f"Sent => V-team's role: {role}, To: {to}, CC: {cc}".strip()
 
-def mail_log_exists(to:str, cc:str, role:str, mail_details="", is_draft=False) -> bool:
+def mail_log_exists(to:str, cc:str, role:str) -> bool:
     """
     Checks if a mail log entry exists in the mail logs.
     Args:
         to (str): The recipient email address.
         cc (str): The CC email address.
         role (str): The role associated with the mail.
-        mail_details (str, optional): Additional details about the mail. Defaults to "".
-        is_draft (bool, optional): Whether the mail is a draft. Defaults to False.
     Returns:
         bool: True if the mail log entry exists, False otherwise.
     """
 
     logs = MAIL_LOGS["content"]
     log = mail_log(
-        to, 
-        cc, 
-        role, 
-        mail_details, 
-        is_draft
-    ) if is_draft else mail_log(
         to, 
         cc, 
         role 

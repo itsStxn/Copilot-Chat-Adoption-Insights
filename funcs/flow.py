@@ -31,7 +31,7 @@ from .logs import (
     clear_console, 
     adjust_logs, 
     delete_file, 
-    log, 
+    log
   )
 from .dataframe import (
     set_structure_variables, 

@@ -405,4 +405,7 @@ def read_sharepoint_txt_data() -> pd.DataFrame:
         row_counter.wait_for(state="visible")
         sharepoint.wait_for_timeout(500)
     
+    if not prev_row.strip():
+        raise Exception("No data found in the SharePoint editor")
+
     return pd.DataFrame(data[1:], columns=data[0])
