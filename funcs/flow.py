@@ -258,7 +258,7 @@ def run_flow() -> None:
     """
     Executes the main automation flow for the application.
     This function initializes logging, selects the operation mode, manages browser sessions,
-    updates account data, and optionally triggers notification flows. It also handles log
+    updates account data, and optionally triggers notificatKion flows. It also handles log
     retention based on user input and ensures proper cleanup of resources. Any exceptions
     encountered during execution are logged with detailed tracebacks.
     Raises:

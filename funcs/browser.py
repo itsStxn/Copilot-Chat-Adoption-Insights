@@ -52,7 +52,7 @@ def find_work_profile(p:Playwright) -> tuple[BrowserContext, Page, Page]:
     for profile in list_edge_profiles():
         profile_path = os.path.join(EDGE_USER_DATA_DIR, profile)
         log(f"Checking profile: {profile}...", left_nl=1)
-        
+
         browser = p.chromium.launch_persistent_context(
             profile_path,
             channel="msedge",
