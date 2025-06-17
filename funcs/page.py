@@ -29,6 +29,7 @@ def click_and_wait(element:Locator, page:Page, timeout=500, render_time=30000, c
     page.wait_for_timeout(timeout)
     for _ in range(clicks):
         page.wait_for_timeout(timeout)
+        log(f'Clicking element: {element}')
         element.click()
     
     page.wait_for_timeout(timeout)

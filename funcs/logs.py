@@ -193,12 +193,12 @@ def choose_keep_logs() -> bool:
     }
 
     while True:
-        choice = input("Enter your choice (1, 2 or 3): ").strip()
+        choice = input("Enter your choice (1 or 2): ").strip()
         if choice in modes:
             log(f"{modes[choice]} selected", left_nl=1)
             return choice == "1"
         else:
-            print("Invalid choice. Please enter 1, 2 or 3.")
+            print("Invalid choice. Please enter 1 or 2")
 
 def adjust_logs() -> None:
     """
