@@ -27,9 +27,15 @@ def click_and_wait(element:Locator, page:Page, timeout=500, render_time=30000, c
     element.scroll_into_view_if_needed()
     element.wait_for(state="visible", timeout=render_time)
     page.wait_for_timeout(timeout)
+
     for _ in range(clicks):
         page.wait_for_timeout(timeout)
-        log(f'Clicking element: {element}')
+        selector = page.evaluate(""" el =>
+                el.tagName.toLowerCase() 
+                + (el.id ? '#' + el.id : '')
+                + (!el.id && el.className ? '.' + el.className.split(' ').join('.') : '');
+        """, element.element_handle())
+        log(f'Clicking element: {selector}')
         element.click()
     
     page.wait_for_timeout(timeout)
