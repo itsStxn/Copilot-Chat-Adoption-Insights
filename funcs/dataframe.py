@@ -177,12 +177,13 @@ def powerbi_excel_data() -> pd.DataFrame:
 
     return df
     
-def sharepoint_txt_data(desc:str, close_editor=True) -> pd.DataFrame:
+def sharepoint_txt_data(desc:str, close_editor=True, attmepts=5) -> pd.DataFrame:
     """
     Loads a text data file from SharePoint, reads it into a pandas DataFrame, and optionally closes the editor.
     Args:
         desc (str): The description or identifier of the SharePoint text file to load.
         close_editor (bool, optional): Whether to close the SharePoint editor after loading the data. Defaults to True.
+        attmepts (int, optional): The number of attempts to read the SharePoint text file. Defaults to 5.
     Returns:
         pd.DataFrame: The data from the SharePoint text file as a pandas DataFrame.
     Raises:
@@ -202,7 +203,16 @@ def sharepoint_txt_data(desc:str, close_editor=True) -> pd.DataFrame:
     txt_file = wait_for(sharepoint, SHAREPOINT_DOM, at=[desc])[0]
     txt_file.click()
 
-    df = read_sharepoint_txt_data()
+    df = None
+    for attempt in range(attmepts):
+        try:
+            sharepoint.wait_for_timeout(1000)
+            df = read_sharepoint_txt_data()
+            break
+        except Exception as e:
+            if attempt == attmepts - 1:
+                raise Exception(str(e))
+            log(f"Failed to read SharePoint txt data ({desc}). Attempt {attempt + 1}/{attmepts}. Retrying...")
     
     if close_editor:
         sharepoint_close_editor()
