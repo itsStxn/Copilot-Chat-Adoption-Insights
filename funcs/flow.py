@@ -181,7 +181,7 @@ def notify_exclusions(dialog:str) -> None:
                 )
                 send_new_mail(
                     to=email,
-                    cc="",
+                    cc=DEFAULT_EMAILS.strip(),
                     role=role,
                     names=data["name"],
                     structure=structure,
