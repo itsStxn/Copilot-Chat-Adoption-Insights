@@ -104,6 +104,7 @@ Create an `.env` file in the project's root, then write the following variables:
 - Python 3.8 or higher
 - Microsoft Edge installed
 - *MSFT-AzVPN-Manual* turned on
+- Run it in a terminal opened **as administrator**
 - Required Python libraries (see `requirements.txt`)
 - Working Profile folder in Microsoft Edge's appdata folder
 
