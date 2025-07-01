@@ -98,6 +98,16 @@ Create an `.env` file in the project's root, then write the following variables:
 ## Visuals
 - The html attributes are indicated in dictionaries the `browser.py` file in `/vars`
 
+## Network policies
+
+If the code fails to start and the logs indicate that the browser closed unexpectedly, it may be due to Microsoft network policies on your PC that prevent launching an automated Edge session. Try running it on the office network instead.
+
+## Network policies
+
+To run the programme, you need an Edge profile with access rights to SharePoint and Power BI. These profiles appear as folders (e.g. Profile 1, Profile 2) in the Microsoft Edge directory under your AppData folder.
+
+If the required profile folder isn’t there, open Edge and create a new profile using your work account. This will automatically generate the corresponding folder.
+
 ## Requirements
 
 - Git
