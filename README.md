@@ -42,45 +42,45 @@ Create an `.env` file in the project's root, then write the following variables:
 ## SharePoint folder files
 
 - `Excluded from CCs.txt`
-  - Columns: FullName, Email, V-team role
-  - List of people that will be mailed once and excluded from CCs
+	- Columns: FullName, Email, V-team role
+	- List of people that will be mailed once and excluded from CCs
 - `Filter accounts.txt`
-  - Columns: ID, Accounts
-  - Filters accounts for a specific V-team to consider when sharing the accounts overview visual
-  - Separate *Accounts* by `|` 
+	- Columns: ID, Accounts
+	- Filters accounts for a specific V-team to consider when sharing the accounts overview visual
+	- Separate *Accounts* by `|` 
 - `Mail structure - AE.txt` or `Mail structure - Excluded.txt`
-  - Columns: Command, Text
-  - Outlines how a mail should be composed
-  - AE: outline for Account Execs
-  - Excluded: outline for people that will be mailed once
-  - Column *Text* is the text content that will be written on the mail body
-  - Column *Command*:
-    - **Note**: Commands can be run multiple times simultaneously (E.g. of a command "break line", or "bullet line", or "break title", etc...)
-    - *subject* => Subject of a mail
-    - *line* => Writes paragragh
-    - *title* => Writes bold paragragh
-    - *break* => Inserts a break
-    - *bullet* => Inserts bullets
-    - *visual* => inserts a visual. The id of the visual is anything after a colon (E.g. visual: This is an ID;Weekly progress of the Copilot Chat MAU among your Accounts:)
-    - *save* => If coupled with command *visual*, it will be stored to be later sent to an exclusion
-    - *visuals* => It releases all the accumulated visuals for an exclusion
-    - *url* => inserts a url. The placeholder of the url is anything after a colon (E.g. url: This is a placeholder;www.webaddress.com)
-    - *end* => inserts a paragrah that will end the composing 
+	- Columns: Command, Text
+	- Outlines how a mail should be composed
+	- AE: outline for Account Execs
+	- Excluded: outline for people that will be mailed once
+	- Column *Text* is the text content that will be written on the mail body
+	- Column *Command*:
+	- **Note**: Commands can be run multiple times simultaneously (E.g. of a command "break line", or "bullet line", or "break title", etc...)
+	- *subject* => Subject of a mail
+	- *line* => Writes paragragh
+	- *title* => Writes bold paragragh
+	- *break* => Inserts a break
+	- *bullet* => Inserts bullets
+	- *visual* => inserts a visual. The id of the visual is anything after a colon (E.g. visual: This is an ID;Weekly progress of the Copilot Chat MAU among your Accounts:)
+	- *save* => If coupled with command *visual*, it will be stored to be later sent to an exclusion
+	- *visuals* => It releases all the accumulated visuals for an exclusion
+	- *url* => inserts a url. The placeholder of the url is anything after a colon (E.g. url: This is a placeholder;www.webaddress.com)
+	- *end* => inserts a paragrah that will end the composing 
 - `Skip.txt`
-  - Columns: Email, ID
-  - Avoids mailing a member in a specified V-team  
+	- Columns: Email, ID
+	- Avoids mailing a member in a specified V-team  
 - `Table Data.txt`
-  - Columns: TopParent, Copilot Chat MAU (Paid +UnPaid), Copilot Chat MAU (Paid +UnPaid)/TAM, Copilot Chat Unpaid MAU, Copilot Chat Paid MAU, Copilot Chat H2 Incremental MAU, Total TAM, AE, Date
-  - Copilot Chat adoption data
+	- Columns: TopParent, Copilot Chat MAU (Paid +UnPaid), Copilot Chat MAU (Paid +UnPaid)/TAM, Copilot Chat Unpaid MAU, Copilot Chat Paid MAU, Copilot Chat H2 Incremental MAU, Total TAM, AE, Date
+	- Copilot Chat adoption data
 - `V-teams.txt`
-  - Columns: ID, Role, Names, To, CC
-  - List of V-teams to mail
-  - Separate *Names* values by `,`
-  - Separate *To* and *CC* values by `whitespace`
+	- Columns: ID, Role, Names, To, CC
+	- List of V-teams to mail
+	- Separate *Names* values by `,`
+	- Separate *To* and *CC* values by `whitespace`
 - `Actual TAM.txt`
-  - Columns: ID, Accounts, TAM
-  - List of Accounts and their actual TAM
-  - Separate *Accounts* by `|` 
+	- Columns: ID, Accounts, TAM
+	- List of Accounts and their actual TAM
+	- Separate *Accounts* by `|` 
 
 ## Logging
 
@@ -92,8 +92,8 @@ Create an `.env` file in the project's root, then write the following variables:
 - The script should be run 7 or more days after the las time:
 - The Power BI dashboard shows data taken the day before
 - Recommended to let the script run in the background
-  - It can take up to 3 min to gather visuals and compose a single mail
-  - Should be run while working on something else 
+	- It can take up to 3 min to gather visuals and compose a single mail
+	- Should be run while working on something else 
 
 ## Visuals
 - The html attributes are indicated in dictionaries the `browser.py` file in `/vars`
@@ -122,16 +122,45 @@ If the required profile folder isn’t there, open Edge and create a new profile
 
 1. Clone the repository:
   ```bash
-  git clone <repository-url>
+	   git clone <repository-url>
   ```
+
 2. Navigate to the project directory:
   ```bash
-  cd Copilot-Chat-Adoption-Insights
+	   cd Copilot-Chat-Adoption-Insights
   ```
-3. Install dependencies:
+
+3. Create a virtual environment (recommended name: .venv)
+   - macOS / Linux
   ```bash
-  pip install -r requirements.txt
+		python3 -m venv .venv
   ```
+	- Windows (PowerShell)
+  ```powershell
+		python -m venv .venv
+  ```
+
+4. Activate the virtual environment
+	- macOS / Linux
+  ```bash
+		source .venv/bin/activate
+  ```
+	- Windows (PowerShell)
+  ```powershell
+		.\.venv\Scripts\Activate.ps1
+  ```
+	- Windows (Command Prompt)
+  ```command prompt
+		.venv\Scripts\activate
+  ```
+
+5. Install dependencies into the activated venv
+  ```bash
+	   pip install -r requirements.txt
+  ```
+
+6. (Optional) Add the venv to .gitignore
+	.venv/
 
 ## Usage
 
