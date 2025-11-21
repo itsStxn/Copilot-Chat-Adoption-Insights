@@ -118,49 +118,51 @@ If the required profile folder isn’t there, open Edge and create a new profile
 - Required Python libraries (see `requirements.txt`)
 - Working Profile folder in Microsoft Edge's appdata folder
 
-## Installation
+## Installation## Installation
 
 1. Clone the repository:
-  ```bash
-	   git clone <repository-url>
-  ```
+    ```bash
+    git clone <repository-url>
+    ```
 
 2. Navigate to the project directory:
-  ```bash
-	   cd Copilot-Chat-Adoption-Insights
-  ```
+    ```bash
+    cd Copilot-Chat-Adoption-Insights
+    ```
 
 3. Create a virtual environment (recommended name: .venv)
-   - macOS / Linux
-  ```bash
-		python3 -m venv .venv
-  ```
-	- Windows (PowerShell)
-  ```powershell
-		python -m venv .venv
-  ```
+    - macOS / Linux
+        ```bash
+        python3 -m venv .venv
+        ```
+    - Windows (PowerShell)
+        ```powershell
+        python -m venv .venv
+        ```
 
 4. Activate the virtual environment
-	- macOS / Linux
-  ```bash
-		source .venv/bin/activate
-  ```
-	- Windows (PowerShell)
-  ```powershell
-		.\.venv\Scripts\Activate.ps1
-  ```
-	- Windows (Command Prompt)
-  ```command prompt
-		.venv\Scripts\activate
-  ```
+    - macOS / Linux
+        ```bash
+        source .venv/bin/activate
+        ```
+    - Windows (PowerShell)
+        ```powershell
+        .\.venv\Scripts\Activate.ps1
+        ```
+    - Windows (Command Prompt)
+        ```cmd
+        .venv\Scripts\activate
+        ```
 
 5. Install dependencies into the activated venv
-  ```bash
-	   pip install -r requirements.txt
-  ```
+    ```bash
+    python -m pip install -r requirements.txt
+    ```
 
 6. (Optional) Add the venv to .gitignore
-	.venv/
+    ```text
+    .venv/
+    ```
 
 ## Usage
 
