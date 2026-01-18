@@ -3,7 +3,7 @@
 
 ## Overview
 
-This project contains a script designed to notify Microsoft BeLux V-teams about Copilot Chat adoptions for their accounts. The script automates specific notification tasks to streamline workflows and improve efficiency.
+This project contains a script designed to notify Microsoft BeLux V-teams about Copilot Chat adoptions for their accounts. The script automates notification tasks that would otherwise be performed manually, saving time and effort.
 
 ## Purpose
 
