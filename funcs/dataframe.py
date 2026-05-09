@@ -2,420 +2,517 @@ from .str_actions import str_normalize
 from .imports import dt, td, pytz
 from .logs import log
 from vars.exports import (
-  EMPTY_CELLS_REGEX, 
-  MAIL_STRUCTURES, 
-  SHAREPOINT_DOM, 
-  SHAREPOINT_DOM,
-  DATE_FORMAT, 
-  POWERBI_DOM, 
-  COLTYPES, 
-  ACTUAL,
-  PAGES, 
-  COLS,
-  TEST,
-  pd
+	EMPTY_CELLS_REGEX,
+	MAIL_STRUCTURES,
+	SHAREPOINT_DOM,
+	DATE_FORMAT,
+	POWERBI_DOM,
+	COLTYPES,
+	ACTUAL,
+	PAGES,
+	COLS,
+	TEST,
+	pd,
 )
 from .page import (
-  is_locator_scrolled_to_bottom, 
-  sharepoint_close_editor,
-  row_counter_info,
-  powerbi_headers, 
-  sharepoint_rows,
-  get_new_rows,
-  observe_rows,
-  powerbi_row, 
-  wait_for
+	is_locator_scrolled_to_bottom,
+	sharepoint_close_editor,
+	row_counter_info,
+	powerbi_headers,
+	sharepoint_rows,
+	get_new_rows,
+	observe_rows,
+	powerbi_row,
+	wait_for,
 )
 
 
-def is_week_old(data:pd.DataFrame) -> bool:
-    """
-    Checks if the most recent date in the DataFrame is at least one week older than yesterday (in the Europe/Brussels timezone).
-    Args:
-        data (pd.DataFrame): A pandas DataFrame containing a "Date" column with date values.
-    Returns:
-        bool: True if the last date in the "Date" column is at least one week older than yesterday, False otherwise.
-    """
+_BRUSSELS_TZ = pytz.timezone("Europe/Brussels")
+_ROW_MISMATCH_RETRIES = 5
 
-    dates = data[[COLS["date"]]]
-    dates.loc[:, COLS["date"]] = pd.to_datetime(dates[COLS["date"]])
-    last_date: dt = dates[COLS["date"]].iloc[-1]
 
-    bxl_tz = pytz.timezone("Europe/Brussels")
-    yesterday = dt.now(bxl_tz) - td(days=1)
-    
-    if last_date.tzinfo is None:
-        last_date = bxl_tz.localize(last_date)
-    else:
-        last_date = last_date.astimezone(bxl_tz)
+#* ---------------------------------------------------------------------------
+#* Exceptions
+#* ---------------------------------------------------------------------------
 
-    return (yesterday - last_date) >= td(weeks=1)
+class SharePointFileNotFoundError(KeyError):
+	"""Raised when a requested SharePoint file descriptor is not in SHAREPOINT_DOM."""
 
-def empty_cells_to_num(df:pd.DataFrame) -> pd.DataFrame:
-    """
-    Replaces empty cells in object-type columns of a DataFrame with zeros.
-    This function iterates over all columns in the given DataFrame. For columns with dtype 'object',
-    it replaces values matching the pattern specified by EMPTY_CELLS_REGEX with the integer 0.
-    Args:
-        df (pd.DataFrame): The input DataFrame to process.
-    Returns:
-        pd.DataFrame: The DataFrame with empty cells replaced by zeros in object-type columns.
-    Note:
-        - The function assumes that EMPTY_CELLS_REGEX is defined elsewhere in the code.
-        - Only columns with dtype 'object' are processed.
-    """
+	def __init__(self, desc: str) -> None:
+		super().__init__(f"SharePoint file not found: {desc!r}")
 
-    for col in df.columns:
-        if df[col].dtype == "object":
-            df[col] = df[col].replace(EMPTY_CELLS_REGEX, 0, regex=True)
-    return df
 
-def drop_empty_cells(df:pd.DataFrame) -> pd.DataFrame:
-    """
-    Removes rows from the DataFrame that contain any empty cells or cells matching a specific empty cell regex pattern.
-    Parameters:
-        df (pd.DataFrame): The input DataFrame to process.
-    Returns:
-        pd.DataFrame: A DataFrame with rows containing empty cells or cells matching the EMPTY_CELLS_REGEX in the column specified by COLTYPES["text"] removed.
-    Notes:
-        - The function first drops rows with any NaN values.
-        - Then, it filters out rows where any value in the column specified by COLTYPES["text"] matches the EMPTY_CELLS_REGEX pattern.
-        - Requires the global variables COLTYPES and EMPTY_CELLS_REGEX to be defined.
-    """
+class SharePointReadError(RuntimeError):
+	"""Raised when SharePoint row data cannot be read after exhausting retries."""
 
-    return df.dropna().loc[~df[COLTYPES["text"]].apply(lambda row: row.astype(str).str.match(EMPTY_CELLS_REGEX).any(), axis=1)]
 
-def adjust_powerbi_excel_data(df:pd.DataFrame) -> pd.DataFrame:
-    """
-    Adjusts and cleans a Power BI Excel DataFrame.
-    This function performs the following operations on the input DataFrame:
-    1. Separates the 'TopParent' column and temporarily removes it from the DataFrame.
-    2. Removes commas from string values in all columns except 'TopParent'.
-    3. Reattaches the 'TopParent' column to the DataFrame.
-    4. Sorts the DataFrame by the 'TopParent' column in a case-insensitive manner.
-    5. Adds a 'Date' column with the previous day's date in the 'Europe/Brussels' timezone, formatted according to DATE_FORMAT.
-    6. Cleans the DataFrame by dropping empty cells and converting empty cells to numeric values.
-    Args:
-        df (pd.DataFrame): The input DataFrame to be adjusted and cleaned.
-    Returns:
-        pd.DataFrame: The cleaned and adjusted DataFrame ready for Power BI Excel processing.
-    """
+class SharePointEmptyDataError(ValueError):
+	"""Raised when the SharePoint editor yields no parseable data."""
 
-    top_parent = df[[COLS["account"]]]
 
-    df = df.drop(COLS["account"], axis=1)
-    
-    df = df.map(lambda x: x.replace(",", "") if isinstance(x, str) else x)
-    df = pd.concat([top_parent, df], axis=1)
+class TAMMismatchError(ValueError):
+	"""Raised when the accounts and TAM counts for an AE ID do not match."""
 
-    df = df.sort_values(
-        by=[COLS["account"]],
-        key=lambda col: col.str.lower()
-    )
+	def __init__(self, ae_id: str, n_accounts: int, n_tams: int) -> None:
+		super().__init__(
+			f"Accounts/TAM length mismatch for AE ID {ae_id!r}: "
+			f"{n_accounts} account(s), {n_tams} TAM(s)."
+		)
 
-    bxl_tz = pytz.timezone("Europe/Brussels")
-    time = dt.now(bxl_tz) - td(days=1)
-    df[COLS["date"]] = time.strftime(DATE_FORMAT)
-    
-    return empty_cells_to_num(drop_empty_cells(df))
+
+class RowAttributeError(ValueError):
+	"""Raised when an expected DOM attribute is missing on a Power BI row element."""
+
+	def __init__(self, attribute: str) -> None:
+		super().__init__(f"Attribute {attribute!r} not found on Power BI row element.")
+
+
+#* ---------------------------------------------------------------------------
+#* Date helpers
+#* ---------------------------------------------------------------------------
+
+def _now_brussels() -> dt:
+	"""Return the current datetime in the Europe/Brussels timezone."""
+	return dt.now(_BRUSSELS_TZ)
+
+
+def _localize_to_brussels(timestamp: dt) -> dt:
+	"""Attach or convert a datetime to the Europe/Brussels timezone."""
+	if timestamp.tzinfo is None:
+		return _BRUSSELS_TZ.localize(timestamp)
+	return timestamp.astimezone(_BRUSSELS_TZ)
+
+
+def is_week_old(data: pd.DataFrame) -> bool:
+	"""Return True if the most recent date in the DataFrame is at least one week before yesterday."""
+	dates = pd.to_datetime(data[COLS["date"]])
+	last_date = _localize_to_brussels(dates.iloc[-1])
+	yesterday = _now_brussels() - td(days=1)
+	return (yesterday - last_date) >= td(weeks=1)
+
+
+#* ---------------------------------------------------------------------------
+#* DataFrame cleaning
+#* ---------------------------------------------------------------------------
+
+def empty_cells_to_num(df: pd.DataFrame) -> pd.DataFrame:
+	"""Replace empty-cell matches in object columns with zero."""
+	for col in df.select_dtypes(include="object").columns:
+		df[col] = df[col].replace(EMPTY_CELLS_REGEX, 0, regex=True)
+	return df
+
+
+def drop_empty_cells(df: pd.DataFrame) -> pd.DataFrame:
+	"""Drop rows that contain NaN values or empty-cell matches in text columns."""
+	no_nulls = df.dropna()
+	has_empty = no_nulls[COLTYPES["text"]].apply(
+		lambda row: row.astype(str).str.match(EMPTY_CELLS_REGEX).any(), axis=1
+	)
+	return no_nulls.loc[~has_empty]
+
+
+def adjust_powerbi_excel_data(df: pd.DataFrame) -> pd.DataFrame:
+	"""
+	Clean and normalise a raw Power BI Excel export.
+
+	- Strips commas from non-account string values.
+	- Sorts rows by account name (case-insensitive).
+	- Appends a Date column set to yesterday (Brussels time).
+	- Drops empty rows and converts empty string cells to zero.
+	"""
+	top_parent = df[[COLS["account"]]]
+
+	#* Remove commas from numeric-like string columns so they can be cast later;
+	#* the account column is excluded because it may legitimately contain commas
+	body = df.drop(columns=COLS["account"]).map(
+		lambda x: x.replace(",", "") if isinstance(x, str) else x
+	)
+
+	df = pd.concat([top_parent, body], axis=1)
+	df = df.sort_values(by=COLS["account"], key=lambda col: col.str.lower())
+
+	#* Tag every row with yesterday's date — this export always represents
+	#* the previous day's snapshot in the Brussels timezone
+	yesterday = _now_brussels() - td(days=1)
+	df[COLS["date"]] = yesterday.strftime(DATE_FORMAT)
+
+	return empty_cells_to_num(drop_empty_cells(df))
+
+
+#* ---------------------------------------------------------------------------
+#* Power BI extraction
+#* ---------------------------------------------------------------------------
 
 def powerbi_excel_data() -> pd.DataFrame:
-    """
-    Extracts and returns PowerBI accounts data as a pandas DataFrame.
-    This function automates the process of exporting data from a PowerBI web page.
-    It brings the PowerBI page to the front, locates the relevant table, and iteratively
-    scrolls through the table to collect all visible rows, ensuring no duplicates are added.
-    Once all data is collected, it constructs a DataFrame with appropriate headers and applies
-    any necessary adjustments to the data.
-    Returns:
-        pd.DataFrame: A DataFrame containing the exported PowerBI accounts data.
-    """
+	"""
+	Scrape and return all Power BI accounts data as a cleaned DataFrame.
 
-    log("Exporting PowerBI accounts data...", left_nl=1)
+	Scrolls through the Power BI table incrementally, deduplicating rows,
+	until the bottom is reached.
 
-    powerbi = PAGES["powerbi"]
-    powerbi.bring_to_front()
+	Raises:
+		RowAttributeError: If a row element is missing its index attribute.
+	"""
+	log("Exporting PowerBI accounts data...", left_nl=1)
 
-    table = wait_for(powerbi, POWERBI_DOM, at=["snapshot"])[0]
-    table.scroll_into_view_if_needed()
+	powerbi = PAGES["powerbi"]
+	powerbi.bring_to_front()
 
-    top = wait_for(table, POWERBI_DOM, at=["top"])[0]
-    mid = wait_for(table, POWERBI_DOM, at=["mid"])[0]
+	#* The snapshot container holds the table; top and mid are the header
+	#* and scrollable body sub-panels respectively
+	table = wait_for(powerbi, POWERBI_DOM, at=["snapshot"])[0]
+	table.scroll_into_view_if_needed()
 
-    data = []
-    row_num = 0
-    seen_rows = set()
+	top = wait_for(table, POWERBI_DOM, at=["top"])[0]
+	mid = wait_for(table, POWERBI_DOM, at=["mid"])[0]
 
-    while True:
-        wait_for(mid,  {
-            "next_row": (f".row[row-index='{row_num}']", None)
-        })
+	data: list[list[str]] = []
+	seen_rows: set[str] = set()
+	row_num = 0
 
-        for row in [field.strip() for field in powerbi_row(mid)]:
-            if row not in seen_rows:
-                data.append(row.split("\n"))
-                seen_rows.add(row)
+	row_attr,   _ = POWERBI_DOM["row"]
+	index_attr, _ = POWERBI_DOM["index"]
 
-        if is_locator_scrolled_to_bottom(mid):
-            break
+	while True:
+		#* Block until the expected row index is present in the DOM,
+		#* ensuring the virtual list has rendered before we read it
+		wait_for(mid, {"next_row": (f".row[row-index='{row_num}']", None)})
 
-        mid.evaluate("el => el.scrollBy(0, el.clientHeight/3)")
+		for row in (field.strip() for field in powerbi_row(mid)):
+			if row not in seen_rows:
+					data.append(row.split("\n"))
+					seen_rows.add(row)
 
-        row_attr, _ = POWERBI_DOM["row"]
-        index, _ = POWERBI_DOM["index"]
+		if is_locator_scrolled_to_bottom(mid):
+			break
 
-        last_row = mid.locator(row_attr).last
-        row_num = int(last_row.get_attribute(index))
-        powerbi.wait_for_timeout(500)
-    
-    header = powerbi_headers(top)
-    df = adjust_powerbi_excel_data(
-        pd.DataFrame(data, columns=header)
-    )
+		#* Advance by a third of the viewport so the virtual list renders
+		#* the next batch without skipping any rows at the boundary
+		mid.evaluate("el => el.scrollBy(0, el.clientHeight / 3)")
 
-    log("PowerBI accounts data exported")
+		last_row = mid.locator(row_attr).last
+		raw_attr = last_row.get_attribute(index_attr)
 
-    return df
-    
-def sharepoint_txt_data(desc:str, close_editor=True, attmepts=5) -> pd.DataFrame:
-    """
-    Loads a text data file from SharePoint, reads it into a pandas DataFrame, and optionally closes the editor.
-    Args:
-        desc (str): The description or identifier of the SharePoint text file to load.
-        close_editor (bool, optional): Whether to close the SharePoint editor after loading the data. Defaults to True.
-        attmepts (int, optional): The number of attempts to read the SharePoint text file. Defaults to 5.
-    Returns:
-        pd.DataFrame: The data from the SharePoint text file as a pandas DataFrame.
-    Raises:
-        Exception: If the specified SharePoint file is not found.
-    Side Effects:
-        Brings the SharePoint page to the front, interacts with the UI to open the file, and logs progress messages.
-    """
+		if raw_attr is None:
+			raise RowAttributeError(index_attr)
 
-    log(f"Loading SharePoint txt data ({desc})...", left_nl=1)
+		#* Track the index of the last visible row so the next wait_for
+		#* can block on the correct row appearing after the scroll
+		row_num = int(raw_attr)
+		powerbi.wait_for_timeout(500)
 
-    sharepoint = PAGES["sharepoint"]
-    sharepoint.bring_to_front()
+	df = pd.DataFrame(data, columns=powerbi_headers(top))
+	log("PowerBI accounts data exported.")
+	return adjust_powerbi_excel_data(df)
 
-    if desc not in SHAREPOINT_DOM:
-        raise Exception("SharePoint file not found")
 
-    txt_file = wait_for(sharepoint, SHAREPOINT_DOM, at=[desc])[0]
-    txt_file.click()
-
-    df = None
-    for attempt in range(attmepts):
-        try:
-            sharepoint.wait_for_timeout(1000)
-            df = read_sharepoint_txt_data()
-            break
-        except Exception as e:
-            if attempt == attmepts - 1:
-                raise Exception(str(e))
-            log(f"Failed to read SharePoint txt data ({desc}). Attempt {attempt + 1}/{attmepts}. Retrying...")
-    
-    if close_editor:
-        sharepoint_close_editor()
-
-    log(f"SharePoint txt data loaded ({desc})")
-
-    return df
-
-def fix_tam(progress: pd.DataFrame) -> pd.DataFrame:
-    """
-    Updates the TAM (Total Addressable Market) values in the given DataFrame based on actual TAM data,
-    and recalculates the adoption percentage for each unique AE (Account Executive) ID.
-    Args:
-        progress (pd.DataFrame): The DataFrame containing progress data, including AE IDs, TAM, and adoption columns.
-    Returns:
-        pd.DataFrame: The updated DataFrame with corrected TAM values and recalculated adoption percentages.
-    Notes:
-        - Assumes the existence of global variables COLS (column mappings) and ACTUAL (actual TAM data).
-        - The adoption percentage is recalculated as (adoption / TAM) * 100 for non-zero TAM values,
-          and formatted as a percentage string with two decimal places.
-    """
-
-    t, a = COLS["tam"], COLS["adoption"]
-    a_pct = COLS["adoption %"]
-    actual_tam = ACTUAL["tam"]
-
-    for ID in progress[COLS["ae"]].unique():
-        if ID not in actual_tam["ID"].values:
-            continue
-
-        accounts = str(actual_tam.loc[actual_tam["ID"] == ID, "Accounts"].values[0]).split("|")
-        tams = str(actual_tam.loc[actual_tam["ID"] == ID, "TAM"].values[0]).split(",")
-
-        if len(accounts) != len(tams):
-            raise Exception(
-                f"Accounts and TAM lengths mismatch for AE ID {ID}: "
-                f"{len(accounts)} accounts, {len(tams)} TAMs"
-            )
-        
-        for account, tam in zip(accounts, tams):
-            progress.loc[
-                (progress[COLS["ae"]] == ID) & 
-                (progress[COLS["account"]] == account), t
-            ] = tam
-
-        a_nozero = (progress.loc[progress[t] != 0, a]).astype(int)
-        t_nozero = (progress.loc[progress[t] != 0, t]).astype(int)
-
-        progress[a_pct] = a_nozero / t_nozero
-        progress[a_pct] = progress[a_pct] * 100
-        progress[a_pct] = progress[a_pct].map(lambda x: f"{x:.2f}%")
-        
-    return progress
-
-def try_update_accounts_data() -> pd.DataFrame:
-    """
-    Updates the accounts data from SharePoint if the stored data is older than a week and not in test mode.
-    Returns:
-        pd.DataFrame: The combined DataFrame containing both the stored and newly updated data if an update occurs,
-                      or just the stored data if no update is needed.
-    Workflow:
-        - Retrieves the current stored data from SharePoint.
-        - If running in test mode or the stored data is not a week old, returns the stored data.
-        - Otherwise, fetches new data from Power BI Excel, updates the SharePoint snapshot, and saves the changes.
-        - Returns the concatenated DataFrame of stored and new data.
-    Side Effects:
-        - Interacts with the SharePoint UI to update and save data.
-        - Logs progress and actions throughout the process.
-    """
-
-    sharepoint = PAGES["sharepoint"]
-    stored_data = sharepoint_txt_data("snapshots", close_editor=False)
-
-    if TEST["active"] or not is_week_old(stored_data):
-        motive = "running test" if TEST["active"] else "not a week old"
-        log(f"Returning stored data ({motive})")
-        sharepoint_close_editor()
-        return stored_data
-
-    log("Updating SharePoint Copilot MAU snapshots...", left_nl=1)
-    new_data = fix_tam(powerbi_excel_data())
-
-    sharepoint.bring_to_front()
-
-    id = "rows"
-    line = wait_for(sharepoint, SHAREPOINT_DOM, at=[id], index={id: -1})[0]
-    line.scroll_into_view_if_needed()
-    line.click()
-
-    log("Adding new snapshots data...")
-    csv = new_data.to_csv(index=False, header=False, sep=";").strip()
-    sharepoint.keyboard.press("Enter")
-    sharepoint.keyboard.insert_text(csv)
-    sharepoint.wait_for_timeout(500)
-
-    save_btn = wait_for(sharepoint, SHAREPOINT_DOM, at=["save"])[0]
-    save_btn.click()
-
-    wait_for(sharepoint, SHAREPOINT_DOM, at=["popup"])[0]
-    sharepoint_close_editor()
-
-    log("Returning updated data")
-    
-    return pd.concat([stored_data, new_data], ignore_index=True)
-
-def set_structure_variables(role:str, names:str, url:str="") -> pd.DataFrame:
-    """
-    Generates a structured DataFrame for a given role by replacing placeholders with provided names and URL.
-    Args:
-        role (str): The key representing the role to select the appropriate mail structure from MAIL_STRUCTURES.
-        names (str): A comma-separated string of full names. Only the first names will be used for replacement.
-        url (str, optional): The URL to replace the '*URL*' placeholder in the structure. Defaults to an empty string.
-    Returns:
-        pd.DataFrame: A DataFrame with the structure for the specified role, where '*NAME*' is replaced by the first names and '*URL*' by the provided URL.
-    Raises:
-        KeyError: If the specified role does not exist in MAIL_STRUCTURES.
-    """
-
-    first_names = [name.split(" ")[0] for name in names.split(",")]
-
-    new_structure = MAIL_STRUCTURES[role].copy()
-    new_structure["Text"] = new_structure["Text"].str.replace(
-        "*NAME*",
-        ", ".join(first_names)
-    ).replace(
-        "*URL*", 
-        url
-    )
-
-    return new_structure
+#* ---------------------------------------------------------------------------
+#* SharePoint helpers
+#* ---------------------------------------------------------------------------
 
 def read_sharepoint_txt_data() -> pd.DataFrame:
-    """
-    Reads tabular data from a SharePoint text editor interface and returns it as a pandas DataFrame.
-    This function interacts with a SharePoint page, waits for the relevant DOM elements to load,
-    and extracts row data separated by semicolons (";"). It handles potential row count mismatches
-    by retrying the read operation up to five times. The function normalizes and accumulates the
-    row data, handling cases where rows may be split across multiple reads, and finally constructs
-    a DataFrame using the first row as column headers.
-    Returns:
-        pd.DataFrame: A DataFrame containing the parsed data from the SharePoint text editor,
-        with columns inferred from the first row of the data.
-    Raises:
-        Exception: If the number of rows read does not match the expected row count after retries.
-    """
+	"""
+	Parse tabular data from the SharePoint text editor and return it as a DataFrame.
 
-    sharepoint = PAGES["sharepoint"]
+	Scrolls through the editor, accumulating semicolon-delimited rows. Retries
+	up to _ROW_MISMATCH_RETRIES times when row and counter counts diverge.
 
-    row_counter, sheet = wait_for(
-        sharepoint, 
-        SHAREPOINT_DOM, 
-        at=["row count", "editor"]
-    )
+	Raises:
+		SharePointReadError: If row counts remain mismatched after all retries.
+		SharePointEmptyDataError: If no data is found after reading completes.
+	"""
+	sharepoint = PAGES["sharepoint"]
 
-    sheet.filter(has_text=";").wait_for(state="visible")
-    row_counter.scroll_into_view_if_needed()
-    sheet.scroll_into_view_if_needed()
+	#* Wait for both the row counter and the editor to be present in the DOM
+	row_counter, sheet = wait_for(sharepoint, SHAREPOINT_DOM, at=["row count", "editor"])
 
-    r, c = "rows", "counter"
-    attr, _ = SHAREPOINT_DOM["row"]
-    observe_rows(sheet, r, sharepoint_rows(sheet), attr)
-    observe_rows(row_counter, c, row_counter_info(row_counter))
+	#* Ensure the editor has rendered at least one semicolon-delimited row before proceeding
+	sheet.filter(has_text=";").wait_for(state="visible")
+	row_counter.scroll_into_view_if_needed()
+	sheet.scroll_into_view_if_needed()
 
-    prev_row = ""
-    data = []
+	#* Begin observing DOM mutations on both the sheet and row counter
+	#* so get_new_rows() can diff what has changed between scroll steps
+	attr, _ = SHAREPOINT_DOM["row"]
+	observe_rows(sheet, "rows", sharepoint_rows(sheet), attr)
+	observe_rows(row_counter, "counter", row_counter_info(row_counter))
 
-    log(f"Reading SharePoint txt data...")
-    while True:
-        new_rows, counter = [], []
+	data: list[list[str]] = []
 
-        for i in range(5):
-            new_rows, counter = get_new_rows(r), get_new_rows(c)
-            
-            if len(new_rows) == len(counter):
-                break
-            if i == 4:
-                raise Exception("Row count mismatch in the SharePoint editor")
-            
-            log(f"Row count mismatch in the SharePoint editor. Trying to read again ({i+1}/5)")
-            sharepoint.wait_for_timeout(1000)
-        
-        if len(new_rows) == 0:
-            data.append(prev_row.split(";"))
-            break
-        
-        for i, row in enumerate(new_rows):
-            row = str_normalize(row)
+	#* prev_row buffers the last raw text fragment across scroll boundaries,
+	#* since a logical row can be split across two scroll windows
+	prev_row = ""
 
-            if not prev_row:
-                prev_row = row
-                continue
+	log("Reading SharePoint txt data...")
 
-            if counter[i]:
-                data.append(prev_row.split(";"))
-                prev_row = row
-            else:
-                prev_row += row
+	while True:
+		new_rows, counter = _read_rows_with_retry(sharepoint)
 
-        sheet.evaluate("el => el.scrollBy(0, el.clientHeight*0.85)")
-        row_counter.wait_for(state="visible")
-        sharepoint.wait_for_timeout(500)
-    
-    if not prev_row.strip():
-        raise Exception("No data found in the SharePoint editor")
+		#* No new rows means we have reached the end of the document;
+		#* flush the buffered fragment and exit
+		if not new_rows:
+			data.append(prev_row.split(";"))
+			break
 
-    return pd.DataFrame(data[1:], columns=data[0])
+		prev_row = _accumulate_rows(new_rows, counter, data, prev_row)
+
+		#* Scroll the sheet and counter forward, then wait for the DOM to settle
+		sheet.evaluate("el => el.scrollBy(0, el.clientHeight * 0.85)")
+		row_counter.wait_for(state="visible")
+		sharepoint.wait_for_timeout(500)
+
+	if not prev_row.strip():
+		raise SharePointEmptyDataError("No data found in the SharePoint editor.")
+
+	#* Row 0 is the header; remaining rows are data
+	return pd.DataFrame(data[1:], columns=data[0])
+
+
+def _read_rows_with_retry(sharepoint) -> tuple[list, list]:
+	"""
+	Fetch new rows and their counters, retrying if the counts diverge.
+
+	The SharePoint editor can transiently report mismatched row/counter lengths
+	while the DOM is still settling after a scroll. This function retries until
+	both sequences align or the retry budget is exhausted.
+
+	Args:
+		sharepoint: The Playwright Page for SharePoint, used for wait timeouts.
+
+	Raises:
+		SharePointReadError: If the mismatch persists after _ROW_MISMATCH_RETRIES attempts.
+
+	Returns:
+		A (new_rows, counter) tuple where both lists have equal length.
+	"""
+	for attempt in range(_ROW_MISMATCH_RETRIES):
+		new_rows = get_new_rows("rows")
+		counter  = get_new_rows("counter")
+
+		if len(new_rows) == len(counter):
+			return new_rows, counter
+
+		if attempt < _ROW_MISMATCH_RETRIES - 1:
+			log(f"Row count mismatch — retrying ({attempt + 1}/{_ROW_MISMATCH_RETRIES})...")
+			sharepoint.wait_for_timeout(1000)
+
+	raise SharePointReadError(
+		f"Row/counter mismatch persisted after {_ROW_MISMATCH_RETRIES} retries."
+	)
+
+
+def _accumulate_rows(
+	new_rows: list[str],
+	counter: list,
+	data: list[list[str]],
+	prev_row: str,
+) -> str:
+	"""
+	Merge newly observed row fragments into the data buffer.
+
+	The SharePoint editor does not guarantee that each observed DOM node maps
+	to exactly one logical row; long rows can be split across scroll windows.
+	counter[i] is truthy when the i-th fragment starts a new logical row.
+
+	Algorithm:
+		- If prev_row is empty, the first fragment bootstraps the buffer.
+		- A truthy counter value means the current fragment opens a new logical
+			row, so the buffered fragment is committed to data first.
+		- A falsy counter value means the fragment is a continuation of the
+			current logical row and is appended directly to prev_row.
+
+	Args:
+		new_rows: Raw text fragments observed since the last scroll.
+		counter:  Parallel list of row-boundary signals (truthy = new row).
+		data:     Accumulator list; committed rows are appended here in-place.
+		prev_row: The carry-over fragment from the previous scroll window.
+
+	Returns:
+		The updated prev_row buffer to carry into the next scroll window.
+	"""
+	for i, row in enumerate(new_rows):
+		row = str_normalize(row)
+
+		#* Bootstrap: nothing buffered yet, so just start the buffer
+		if not prev_row:
+			prev_row = row
+			continue
+
+		if counter[i]:
+			#* This fragment opens a new logical row — commit the previous one
+			data.append(prev_row.split(";"))
+			prev_row = row
+		else:
+			#* This fragment continues the current logical row
+			prev_row += row
+
+	return prev_row
+
+
+def sharepoint_txt_data(desc: str, close_editor: bool = True, attempts: int = 5) -> pd.DataFrame:
+	"""
+	Load a SharePoint text file into a DataFrame, retrying on transient failures.
+
+	Args:
+		desc:         Key identifying the SharePoint file in SHAREPOINT_DOM.
+		close_editor: Whether to close the editor after reading. Defaults to True.
+		attempts:     Maximum number of read attempts before re-raising. Defaults to 5.
+
+	Raises:
+		SharePointFileNotFoundError: If desc is not present in SHAREPOINT_DOM.
+		SharePointReadError: If all read attempts fail.
+	"""
+	log(f"Loading SharePoint txt data ({desc})...", left_nl=1)
+
+	if desc not in SHAREPOINT_DOM:
+		raise SharePointFileNotFoundError(desc)
+
+	sharepoint = PAGES["sharepoint"]
+	sharepoint.bring_to_front()
+
+	wait_for(sharepoint, SHAREPOINT_DOM, at=[desc])[0].click()
+
+	last_error: Exception | None = None
+
+	#* Retry the read in case the editor is still rendering after the click
+	for attempt in range(attempts):
+		try:
+			sharepoint.wait_for_timeout(1000)
+			df = read_sharepoint_txt_data()
+			break
+		except Exception as exc:
+			last_error = exc
+			if attempt < attempts - 1:
+					log(f"Read failed ({desc}), attempt {attempt + 1}/{attempts} — retrying...")
+	else:
+		raise SharePointReadError(
+			f"All {attempts} read attempts failed for {desc!r}."
+		) from last_error
+
+	if close_editor:
+		sharepoint_close_editor()
+
+	log(f"SharePoint txt data loaded ({desc}).")
+	return df
+
+
+#* ---------------------------------------------------------------------------
+#* TAM correction
+#* ---------------------------------------------------------------------------
+
+def fix_tam(progress: pd.DataFrame) -> pd.DataFrame:
+	"""
+	Overwrite TAM values from ACTUAL data and recalculate adoption percentages.
+
+	For each AE ID present in the actual TAM lookup, replaces the stored TAM
+	figures per account, then recomputes adoption % as (adoption / TAM) * 100.
+
+	Raises:
+		TAMMismatchError: If the number of accounts and TAMs for an AE ID differ.
+	"""
+	t, a, a_pct = COLS["tam"], COLS["adoption"], COLS["adoption %"]
+	actual_tam = ACTUAL["tam"]
+
+	for ae_id in progress[COLS["ae"]].unique():
+		matches = actual_tam.loc[actual_tam["ID"] == ae_id]
+
+		if matches.empty:
+			continue
+
+		accounts = str(matches["Accounts"].iat[0]).split("|")
+		tams     = str(matches["TAM"].iat[0]).split(",")
+
+		if len(accounts) != len(tams):
+			raise TAMMismatchError(ae_id, len(accounts), len(tams))
+
+		for account, tam in zip(accounts, tams):
+			mask = (progress[COLS["ae"]] == ae_id) & (progress[COLS["account"]] == account)
+			progress.loc[mask, t] = tam
+
+		#* Exclude zero-TAM rows from the percentage calculation to avoid
+		#* division-by-zero; those rows keep whatever adoption % they had before
+		nonzero  = progress[t] != 0
+		adoption = progress.loc[nonzero, a].astype(int)
+		tam_vals = progress.loc[nonzero, t].astype(int)
+
+		progress.loc[nonzero, a_pct] = (adoption / tam_vals * 100).map(lambda x: f"{x:.2f}%")
+
+	return progress
+
+
+#* ---------------------------------------------------------------------------
+#* Snapshot update
+#* ---------------------------------------------------------------------------
+
+def try_update_accounts_data() -> pd.DataFrame:
+	"""
+	Return the latest accounts snapshot, updating SharePoint first if data is stale.
+
+	Fetches the stored snapshot; if it is not yet a week old (or a test run is
+	active) returns it unchanged. Otherwise, pulls fresh Power BI data, appends
+	it to the SharePoint file, saves, and returns the combined DataFrame.
+	"""
+	sharepoint  = PAGES["sharepoint"]
+	stored_data = sharepoint_txt_data("snapshots", close_editor=False)
+
+	if TEST["active"] or not is_week_old(stored_data):
+		motive = "running test" if TEST["active"] else "data not yet a week old"
+		log(f"Returning stored data ({motive}).")
+		sharepoint_close_editor()
+		return stored_data
+
+	log("Updating SharePoint Copilot MAU snapshots...", left_nl=1)
+	new_data = fix_tam(powerbi_excel_data())
+
+	sharepoint.bring_to_front()
+
+	#* Position the cursor at the last existing row so the new CSV is
+	#* appended rather than inserted in the middle of the file
+	last_line = wait_for(sharepoint, SHAREPOINT_DOM, at=["rows"], index={"rows": -1})[0]
+	last_line.scroll_into_view_if_needed()
+	last_line.click()
+
+	log("Appending new snapshot rows...")
+	csv = new_data.to_csv(index=False, header=False, sep=";").strip()
+	sharepoint.keyboard.press("Enter")
+	sharepoint.keyboard.insert_text(csv)
+	sharepoint.wait_for_timeout(500)
+
+	#* Click Save and wait for the confirmation popup before closing,
+	#* ensuring the write is committed before we navigate away
+	wait_for(sharepoint, SHAREPOINT_DOM, at=["save"])[0].click()
+	wait_for(sharepoint, SHAREPOINT_DOM, at=["popup"])[0]
+	sharepoint_close_editor()
+
+	log("Returning updated data.")
+	return pd.concat([stored_data, new_data], ignore_index=True)
+
+
+#* ---------------------------------------------------------------------------
+#* Mail structure helpers
+#* ---------------------------------------------------------------------------
+
+def set_structure_variables(role: str, names: str, url: str = "") -> pd.DataFrame:
+	"""
+	Build a mail structure DataFrame for the given role with name and URL substitutions.
+
+	Args:
+		role:  Key into MAIL_STRUCTURES selecting the template.
+		names: Comma-separated full names; only first names are substituted.
+		url:   Replaces the *URL* placeholder. Defaults to an empty string.
+
+	Raises:
+		KeyError: If role is not present in MAIL_STRUCTURES.
+	"""
+	#* Extract only the first name from each "First Last" entry so the greeting
+	#* reads naturally even when multiple recipients are addressed together
+	first_names = ", ".join(name.split()[0] for name in names.split(","))
+
+	structure = MAIL_STRUCTURES[role].copy()
+	structure["Text"] = (
+		structure["Text"]
+		.str.replace("*NAME*", first_names, regex=False)
+		.str.replace("*URL*", url, regex=False)
+	)
+
+	return structure

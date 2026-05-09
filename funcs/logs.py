@@ -2,217 +2,236 @@ from vars.exports import LOGS, MAIL_LOGS, TEST, os
 from .imports import dt
 
 
-def clear_console() -> None:
-    """
-    Clears the terminal or command prompt screen.
-    This function detects the operating system and executes the appropriate command
-    to clear the console window. On Windows, it uses 'cls'; on Unix-like systems, it uses 'clear'.
-    """
+#* ---------------------------------------------------------------------------
+#* Console
+#* ---------------------------------------------------------------------------
 
-    os.system('cls' if os.name == 'nt' else 'clear')
+def clear_console() -> None:
+	"""Clear the terminal screen on both Windows and Unix-like systems."""
+	os.system("cls" if os.name == "nt" else "clear")
+
+
+#* ---------------------------------------------------------------------------
+#* File I/O
+#* ---------------------------------------------------------------------------
 
 def read_file_as_str(path: str) -> str:
-    """
-    Reads the contents of a file and returns it as a string.
-    Args:
-        path (str): The path to the file to be read.
-    Returns:
-        str: The contents of the file as a string.
-    Raises:
-        FileNotFoundError: If the file does not exist at the specified path.
-        IOError: If an I/O error occurs while reading the file.
-    """
-   
-    with open(path, 'r', encoding='utf-8') as file:
-        return file.read()
-    
-def write_to_file(path:str, content:str) -> None:
-    """
-    Writes the given content to a file at the specified path.
-    Parameters:
-        path (str): The file path where the content will be written.
-        content (str): The content to write to the file.
-    Returns:
-        None
-    """
+	"""
+	Read a file and return its contents as a string.
 
-    with open(path, 'w') as file:
-        file.write(content + "\n")
+	Raises:
+		FileNotFoundError: If no file exists at path.
+		IOError: If the file cannot be read.
+	"""
+	with open(path, "r", encoding="utf-8") as f:
+		return f.read()
 
-def delete_file(path:str) -> None:
-    """
-    Deletes the specified file if it exists and is within the project's root folder.
-    Args:
-        path (str): The relative or absolute path to the file to be deleted.
-    Raises:
-        ValueError: If the specified file is outside the project's root folder.
-    Notes:
-        - Prints a confirmation message if the file is deleted.
-        - Prints a message if the file does not exist.
-    """
 
-    root_folder = os.path.abspath(os.getcwd())
-    file_path = os.path.abspath(path)
+def write_to_file(path: str, content: str) -> None:
+	"""Write content to a file, appending a trailing newline."""
+	with open(path, "w", encoding="utf-8") as f:
+		f.write(content + "\n")
 
-    if not file_path.startswith(root_folder):
-        raise ValueError(f"Error: The file '{path}' is outside the project's root folder")
 
-    try:
-        os.remove(file_path)
-        print(f"File '{file_path}' deleted")
-    except FileNotFoundError:
-        print(f"Successful run, file '{file_path}' was not created")
+def delete_file(path: str) -> None:
+	"""
+	Delete a file if it exists, refusing paths outside the project root.
 
-def logs_to_set(text:str) -> set:
-    """
-    Converts a multiline log string into a set of log messages.
-    Each line in the input text is expected to contain a delimiter " - ".
-    The function extracts the part after the first occurrence of " - " from each non-empty line,
-    strips leading and trailing whitespace, and adds it to a set to ensure uniqueness.
-    Args:
-        text (str): Multiline string containing log entries.
-    Returns:
-        set: A set of unique log message strings extracted from the input.
-    Raises:
-        ValueError: If the input string is empty or contains only whitespace.
-    """
+	Raises:
+		ValueError: If path resolves to a location outside the project root.
+	"""
+	root = os.path.abspath(os.getcwd())
+	abs_path = os.path.abspath(path)
 
-    if not text.strip():
-        raise ValueError("Error: The string is empty")
+	if not abs_path.startswith(root):
+		raise ValueError(f"File {path!r} is outside the project root and cannot be deleted.")
 
-    content_set = {line.split(" - ")[1].strip() for line in text.splitlines() if line.strip() and " - " in line}
-    
-    return content_set
+	try:
+		os.remove(abs_path)
+		print(f"File {abs_path!r} deleted.")
+	except FileNotFoundError:
+		print(f"File {abs_path!r} was never created — nothing to delete.")
 
-def logs_file_to_set(path:str) -> set:
-    """
-    Reads a log file and extracts the second field from each line (split by ' - ') into a set.
-    Args:
-        path (str): The path to the log file.
-    Returns:
-        set: A set containing the second field from each valid log line.
-    Raises:
-        FileNotFoundError: If the specified file does not exist.
-    """
 
-    try:
-        with open(path, 'r') as file:
-            content_set = {line.split(" - ")[1].strip() for line in file.readlines() if line.strip() and " - " in line}
-        
-        return content_set
-    except FileNotFoundError:
-        raise FileNotFoundError(f"Error: The file {path} does not exist")
+#* ---------------------------------------------------------------------------
+#* Log parsing
+#* ---------------------------------------------------------------------------
 
-def log(message:str="", type=LOGS, write=False, silent=False, left_nl=0, right_nl=1, from_last=False) -> None:
-    """
-    Logs a message with timestamp to a specified log type, optionally writing to file and controlling output formatting.
-    Args:
-        message (str): The message to log. Defaults to an empty string.
-        type (dict): The log type dictionary, typically containing 'path' and 'content' keys. Defaults to LOGS.
-        write (bool): If True, writes the log content to the file specified in type['path']. Defaults to False.
-        silent (bool): If True, suppresses printing the message to stdout. Defaults to False.
-        left_nl (int): Number of newlines to prepend before each log entry. Defaults to 0.
-        right_nl (int): Number of newlines to append after each log entry. Defaults to 1.
-        from_last (bool): If True, prepends existing log file content to the current log content. Defaults to False.
-    Returns:
-        None
-    """
+def _parse_log_lines(lines: list[str]) -> set[str]:
+	"""
+	Extract the message portion from a sequence of log lines.
 
-    left_nl = "\n" * left_nl
-    right_nl = "\n" * right_nl
-    time = dt.now().strftime("%Y-%m-%d %H:%M:%S")
+	Each valid line is expected to match the pattern "<timestamp> - <message>".
+	Lines that are blank or lack the separator are silently skipped.
 
-    if from_last and os.path.exists(type["path"]):
-        type["content"] = read_file_as_str(type["path"]) + type["content"]
+	Returns:
+		A set of unique message strings.
+	"""
+	return {
+		line.split(" - ", maxsplit=1)[1].strip()
+		for line in lines
+		if line.strip() and " - " in line
+	}
 
-    if message.strip():
-        for line in message.splitlines():
-            if line.strip():
-                type["content"] += f"{left_nl}{time} - {line}{right_nl}"
-        
-        if not silent:
-            print(f"{left_nl}{message}{right_nl}", end="")
 
-    if write:
-        logs = logs_to_set(type["content"])
-        logs.discard("START")
-        logs.discard("END")
+def logs_to_set(text: str) -> set[str]:
+	"""
+	Parse a multiline log string into a set of unique message strings.
 
-        if len(logs) > 0:
-            write_to_file(type["path"], type["content"])
+	Raises:
+		ValueError: If text is empty or contains only whitespace.
+	"""
+	if not text.strip():
+		raise ValueError("Cannot parse an empty log string.")
 
-def mail_log(to:str, cc:str, role:str) -> str:
-    """
-    Generates a formatted log message for an email sent to a V-team member.
-    Args:
-        to (str): The recipient's email address.
-        cc (str): The CC'd email addresses.
-        role (str): The role of the V-team member.
-    Returns:
-        str: A formatted string describing the sent email log.
-    """
+	return _parse_log_lines(text.splitlines())
 
-    return f"Sent => V-team's role: {role}, To: {to}, CC: {cc}".strip()
 
-def mail_log_exists(to:str, cc:str, role:str) -> bool:
-    """
-    Checks if a mail log entry exists in the mail logs.
-    Args:
-        to (str): The recipient email address.
-        cc (str): The CC email address.
-        role (str): The role associated with the mail.
-    Returns:
-        bool: True if the mail log entry exists, False otherwise.
-    """
+def logs_file_to_set(path: str) -> set[str]:
+	"""
+	Read a log file and return its messages as a set of unique strings.
 
-    logs = MAIL_LOGS["content"]
-    log = mail_log(
-        to, 
-        cc, 
-        role 
-    )
+	Raises:
+		FileNotFoundError: If no file exists at path.
+	"""
+	try:
+		with open(path, "r", encoding="utf-8") as f:
+			return _parse_log_lines(f.readlines())
+	except FileNotFoundError:
+		raise FileNotFoundError(f"Log file not found: {path!r}")
 
-    return logs and log in logs_to_set(logs)
+
+#* ---------------------------------------------------------------------------
+#* Logging
+#* ---------------------------------------------------------------------------
+
+def log(
+	message: str = "",
+	type: dict = LOGS,
+	write: bool = False,
+	silent: bool = False,
+	left_nl: int = 0,
+	right_nl: int = 1,
+	from_last: bool = False,
+) -> None:
+	"""
+	Append a timestamped message to an in-memory log buffer, optionally flushing to disk.
+
+	Each non-empty line in message is stored as "<timestamp> - <line>".
+	When write=True the buffer is persisted only if it contains at least one
+	meaningful entry (START and END markers are excluded from the count).
+
+	Args:
+		message:   Text to log. Multi-line strings are split and stored line by line.
+		type:      Log target dict with "path" and "content" keys. Defaults to LOGS.
+		write:     Flush the buffer to type["path"] after appending. Defaults to False.
+		silent:    Suppress stdout output. Defaults to False.
+		left_nl:   Blank lines to prepend before each stored entry. Defaults to 0.
+		right_nl:  Blank lines to append after each stored entry. Defaults to 1.
+		from_last: Prepend the existing log file's content to the buffer before
+						appending. Useful for resuming across sessions. Defaults to False.
+	"""
+	prefix = "\n" * left_nl
+	suffix = "\n" * right_nl
+	timestamp = dt.now().strftime("%Y-%m-%d %H:%M:%S")
+
+	#* Seed the in-memory buffer with whatever was written in a previous session
+	if from_last and os.path.exists(type["path"]):
+		type["content"] = read_file_as_str(type["path"]) + type["content"]
+
+	if message.strip():
+		for line in message.splitlines():
+			if line.strip():
+				type["content"] += f"{prefix}{timestamp} - {line}{suffix}"
+
+		if not silent:
+			print(f"{prefix}{message}{suffix}", end="")
+
+	if write:
+		#* Exclude bookkeeping markers before deciding whether to persist
+		entries = logs_to_set(type["content"]) - {"START", "END"}
+		if entries:
+			write_to_file(type["path"], type["content"])
+
+
+#* ---------------------------------------------------------------------------
+#* Mail log helpers
+#* ---------------------------------------------------------------------------
+
+def mail_log(to: str, cc: str, role: str) -> str:
+	"""Return the canonical log string for a sent v-team email."""
+	return f"Sent => V-team's role: {role}, To: {to}, CC: {cc}".strip()
+
+
+def mail_log_exists(to: str, cc: str, role: str) -> bool:
+	"""
+	Return True if a matching mail log entry already exists in the buffer.
+
+	Avoids redundant sends by checking the in-memory MAIL_LOGS buffer before
+	attempting to deliver a message.
+	"""
+	content = MAIL_LOGS["content"]
+
+	#* An empty buffer means nothing has been sent yet in this session
+	if not content:
+		return False
+
+	return mail_log(to, cc, role) in logs_to_set(content)
+
+
+#* ---------------------------------------------------------------------------
+#* Interactive prompts
+#* ---------------------------------------------------------------------------
+
+_LOG_ACTIONS: dict[str, str] = {
+	"1": "Keep logs",
+	"2": "Discard logs",
+}
+
+_MODES: dict[str, str] = {
+	"1": "Test mode",
+	"2": "Update mode",
+	"3": "Rollout mode",
+}
+
 
 def choose_keep_logs() -> bool:
-    """
-    Prompts the user to choose whether to keep or discard logs.
-    Displays a menu with options to keep or discard logs, and repeatedly asks for user input until a valid choice is made.
-    Logs the selected action and returns True if "Keep logs" is chosen, or False if "Discard logs" is chosen.
-    Returns:
-        bool: True if the user chooses to keep logs, False if the user chooses to discard logs.
-    """
-    
-    log("Choose action:")
-    log("1. Keep logs")
-    log("2. Discard logs")
+	"""
+	Prompt the user to keep or discard logs after a run.
 
-    modes = {
-        "1": "Keep logs",
-        "2": "Discard logs",
-    }
+	Returns:
+		True if the user chooses to keep logs, False to discard.
+	"""
+	log("Choose action:")
+	for key, label in _LOG_ACTIONS.items():
+		log(f"{key}. {label}")
 
-    while True:
-        choice = input("Enter your choice (1 or 2): ").strip()
-        if choice in modes:
-            log(f"{modes[choice]} selected", left_nl=1)
-            return choice == "1"
-        else:
-            print("Invalid choice. Please enter 1 or 2")
+	while True:
+		choice = input("Enter your choice (1 or 2): ").strip()
+
+		if choice in _LOG_ACTIONS:
+			log(f"{_LOG_ACTIONS[choice]} selected", left_nl=1)
+			return choice == "1"
+
+		print("Invalid choice. Please enter 1 or 2.")
+
+
+#* ---------------------------------------------------------------------------
+#* Log path adjustment
+#* ---------------------------------------------------------------------------
 
 def adjust_logs() -> None:
-    """
-    Adjusts the log file paths for testing and logs recent entries.
-    If the global TEST dictionary has "active" set to True, this function prefixes the log file paths
-    in the MAIL_LOGS and LOGS dictionaries with "test_". It then calls the `log` function twice:
-    first to log recent entries from the default log, and second to log recent entries from the mail logs.
-    Returns:
-        None
-    """
+	"""
+	Prefix log file paths with "test_" when running in test mode, then
+	seed both in-memory buffers from their respective files on disk.
 
-    if TEST["active"]:
-        MAIL_LOGS["path"] = f"test_{MAIL_LOGS['path']}"
-        LOGS["path"] = f"test_{LOGS['path']}"
+	Seeding via from_last=True ensures that log entries from previous
+	sessions are not lost when the same log file is reused.
+	"""
+	if TEST["active"]:
+		#* Redirect all output to test-specific files so real logs are not polluted
+		LOGS["path"]      = f"test_{LOGS['path']}"
+		MAIL_LOGS["path"] = f"test_{MAIL_LOGS['path']}"
 
-    log(from_last=True)
-    log(type=MAIL_LOGS, from_last=True)
+	log(from_last=True)
+	log(type=MAIL_LOGS, from_last=True)
